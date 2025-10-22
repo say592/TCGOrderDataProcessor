@@ -20,34 +20,44 @@ const TCGPlayerOrderProcessor = () => {
     }, 3000);
   };
 
-  // Load set mappings from imported CSV file on component mount
+  // Load set mappings from CSV file on component mount
   useEffect(() => {
-    try {
-      // Parse imported CSV
-      const lines = setMappingsCSV.trim().split('\n');
-      const mappings = {};
+    const loadSetMappings = async () => {
+      try {
+        const response = await fetch('/set-mappings.csv');
+        if (!response.ok) {
+          throw new Error('Failed to load set mappings');
+        }
+        const csvText = await response.text();
 
-      // Skip header row (index 0) and process data rows
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) {
-          // Split by comma, handling potential quotes
-          const parts = line.split(',');
-          if (parts.length >= 2) {
-            const setName = parts[0].trim();
-            const setCode = parts[1].trim();
-            mappings[setName] = setCode;
+        // Parse CSV
+        const lines = csvText.trim().split('\n');
+        const mappings = {};
+
+        // Skip header row (index 0) and process data rows
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line) {
+            // Split by comma, handling potential quotes
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+              const setName = parts[0].trim();
+              const setCode = parts[1].trim();
+              mappings[setName] = setCode;
+            }
           }
         }
-      }
 
-      setSetMappings(mappings);
-      setMappingsLoaded(true);
-    } catch (error) {
-      console.error('Error loading set mappings:', error);
-      setErrors(['Failed to load set mappings. Using empty mappings.']);
-      setMappingsLoaded(true);
-    }
+        setSetMappings(mappings);
+        setMappingsLoaded(true);
+      } catch (error) {
+        console.error('Error loading set mappings:', error);
+        setErrors(['Failed to load set mappings. Using empty mappings.']);
+        setMappingsLoaded(true);
+      }
+    };
+
+    loadSetMappings();
   }, []);
 
   const parseDate = (dateStr) => {
@@ -527,8 +537,8 @@ const TCGPlayerOrderProcessor = () => {
 
           <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4">
             <p className="text-sm text-blue-800">
-              Set mappings are loaded from <code className="bg-blue-100 px-1 rounded">set-mappings.csv</code> in the root of the repository.
-              To modify mappings, edit the CSV file, rebuild, and reload the application.
+              Set mappings are loaded from <code className="bg-blue-100 px-1 rounded">set-mappings.csv</code> in the repository.
+              To modify mappings, edit the CSV file and reload the application.
             </p>
           </div>
 
@@ -737,8 +747,8 @@ const TCGPlayerOrderProcessor = () => {
         ) : (
           <ol className="space-y-1 ml-4">
             <li>1. View currently loaded set name to set code mappings</li>
-            <li>2. Mappings are loaded from set-mappings.csv in the root of the repository</li>
-            <li>3. To modify mappings, edit the CSV file, rebuild, and reload the app</li>
+            <li>2. Mappings are loaded from set-mappings.csv in the repository</li>
+            <li>3. To modify mappings, edit the CSV file and reload the app</li>
           </ol>
         )}
       </div>
