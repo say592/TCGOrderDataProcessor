@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Upload, Copy, Download, FileText, AlertCircle } from 'lucide-react';
+import setMappingsCSV from '../set-mappings.csv?raw';
 
 const TCGPlayerOrderProcessor = () => {
   const [inputData, setInputData] = useState('');
@@ -9,28 +10,8 @@ const TCGPlayerOrderProcessor = () => {
   const [mode, setMode] = useState('csv');
   const [generatedUrls, setGeneratedUrls] = useState([]);
   const [toast, setToast] = useState({ show: false, message: '' });
-  const [setMappings, setSetMappings] = useState({
-    'The List': 'LIST',
-    'Murders at Karlov Manor Commander': 'MKC',
-    'Secret Lair Drop': 'SLD',
-    'Final Fantasy Commander': 'FIC',
-    'Foundations': 'FDN',
-    'Duskmourn: House of Horror Commander': 'DSC',
-    'Tarkir: Dragonstorm Commander': 'TDC',
-    'Commander: FINAL FANTASY': 'FIC',
-    'Final Fantasy': 'FIN',
-    'FINAL FANTASY': 'FIN',
-    'Secret Lair Drop Series': 'SLD',
-    'The List Reprints': 'LIST',
-    'Commander: Duskmourn': 'DSC',
-    'Modern Horizons 3': 'M3C',
-    'Commander: Modern Horizons 3': 'M3C',
-    'Outlaws of Thunder Junction': 'OTJ',
-    'Commander: Outlaws of Thunder Junction': 'OTC',
-    'Promo Pack': 'Promo'
-  });
-  const [newSetName, setNewSetName] = useState('');
-  const [newSetCode, setNewSetCode] = useState('');
+  const [setMappings, setSetMappings] = useState({});
+  const [mappingsLoaded, setMappingsLoaded] = useState(false);
 
   const showToast = (message) => {
     setToast({ show: true, message });
@@ -38,6 +19,36 @@ const TCGPlayerOrderProcessor = () => {
       setToast({ show: false, message: '' });
     }, 3000);
   };
+
+  // Load set mappings from imported CSV file on component mount
+  useEffect(() => {
+    try {
+      // Parse imported CSV
+      const lines = setMappingsCSV.trim().split('\n');
+      const mappings = {};
+
+      // Skip header row (index 0) and process data rows
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line) {
+          // Split by comma, handling potential quotes
+          const parts = line.split(',');
+          if (parts.length >= 2) {
+            const setName = parts[0].trim();
+            const setCode = parts[1].trim();
+            mappings[setName] = setCode;
+          }
+        }
+      }
+
+      setSetMappings(mappings);
+      setMappingsLoaded(true);
+    } catch (error) {
+      console.error('Error loading set mappings:', error);
+      setErrors(['Failed to load set mappings. Using empty mappings.']);
+      setMappingsLoaded(true);
+    }
+  }, []);
 
   const parseDate = (dateStr) => {
     try {
@@ -513,72 +524,40 @@ const TCGPlayerOrderProcessor = () => {
       {mode === 'config' && (
         <div className="bg-gray-50 p-4 rounded-lg mb-6">
           <h2 className="text-lg font-semibold mb-4">Set Name to Set Code Mappings</h2>
-          
-          <div className="bg-white p-4 rounded border mb-4">
-            <h3 className="font-semibold mb-3">Add New Mapping</h3>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="Set Name (e.g., 'Final Fantasy Commander')"
-                value={newSetName}
-                onChange={(e) => setNewSetName(e.target.value)}
-                className="flex-1 p-2 border rounded"
-              />
-              <input
-                type="text"
-                placeholder="Set Code (e.g., 'FIC')"
-                value={newSetCode}
-                onChange={(e) => setNewSetCode(e.target.value)}
-                className="w-32 p-2 border rounded"
-              />
-              <button
-                onClick={() => {
-                  if (newSetName && newSetCode) {
-                    setSetMappings({...setMappings, [newSetName]: newSetCode});
-                    setNewSetName('');
-                    setNewSetCode('');
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Add
-              </button>
-            </div>
+
+          <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4">
+            <p className="text-sm text-blue-800">
+              Set mappings are loaded from <code className="bg-blue-100 px-1 rounded">set-mappings.csv</code> in the root of the repository.
+              To modify mappings, edit the CSV file, rebuild, and reload the application.
+            </p>
           </div>
 
           <div className="bg-white p-4 rounded border">
-            <h3 className="font-semibold mb-3">Current Mappings</h3>
-            <div className="max-h-96 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100 sticky top-0">
-                  <tr>
-                    <th className="p-2 text-left">Set Name</th>
-                    <th className="p-2 text-left">Set Code</th>
-                    <th className="p-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(setMappings).map(([name, code]) => (
-                    <tr key={name} className="border-t">
-                      <td className="p-2">{name}</td>
-                      <td className="p-2 font-mono">{code}</td>
-                      <td className="p-2">
-                        <button
-                          onClick={() => {
-                            const newMappings = {...setMappings};
-                            delete newMappings[name];
-                            setSetMappings(newMappings);
-                          }}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Delete
-                        </button>
-                      </td>
+            <h3 className="font-semibold mb-3">Loaded Mappings ({Object.keys(setMappings).length} total)</h3>
+            {!mappingsLoaded ? (
+              <div className="text-gray-500 text-center py-4">Loading mappings...</div>
+            ) : Object.keys(setMappings).length === 0 ? (
+              <div className="text-gray-500 text-center py-4">No mappings loaded</div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="p-2 text-left">Set Name</th>
+                      <th className="p-2 text-left">Set Code</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {Object.entries(setMappings).map(([name, code]) => (
+                      <tr key={name} className="border-t">
+                        <td className="p-2">{name}</td>
+                        <td className="p-2 font-mono">{code}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -757,8 +736,9 @@ const TCGPlayerOrderProcessor = () => {
           </ol>
         ) : (
           <ol className="space-y-1 ml-4">
-            <li>1. Add set name to set code mappings</li>
-            <li>2. Mappings apply automatically when processing orders</li>
+            <li>1. View currently loaded set name to set code mappings</li>
+            <li>2. Mappings are loaded from set-mappings.csv in the root of the repository</li>
+            <li>3. To modify mappings, edit the CSV file, rebuild, and reload the app</li>
           </ol>
         )}
       </div>
