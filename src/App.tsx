@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Upload, Copy, Download, FileText, AlertCircle } from 'lucide-react';
+import setMappingsCSV from '../set-mappings.csv?raw';
 
 const TCGPlayerOrderProcessor = () => {
   const [inputData, setInputData] = useState('');
