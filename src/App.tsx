@@ -8,6 +8,7 @@ const TCGPlayerOrderProcessor = () => {
   const [errors, setErrors] = useState([]);
   const [mode, setMode] = useState('csv');
   const [generatedUrls, setGeneratedUrls] = useState([]);
+  const [toast, setToast] = useState({ show: false, message: '' });
   const [setMappings, setSetMappings] = useState({
     'The List': 'LIST',
     'Murders at Karlov Manor Commander': 'MKC',
@@ -30,6 +31,13 @@ const TCGPlayerOrderProcessor = () => {
   });
   const [newSetName, setNewSetName] = useState('');
   const [newSetCode, setNewSetCode] = useState('');
+
+  const showToast = (message) => {
+    setToast({ show: true, message });
+    setTimeout(() => {
+      setToast({ show: false, message: '' });
+    }, 3000);
+  };
 
   const parseDate = (dateStr) => {
     try {
@@ -386,7 +394,7 @@ const TCGPlayerOrderProcessor = () => {
   const copyUrlsToClipboard = () => {
     const urlData = generatedUrls.join('\n');
     navigator.clipboard.writeText(urlData).then(() => {
-      alert('URLs copied to clipboard!');
+      showToast('URLs copied to clipboard!');
     });
   };
 
@@ -409,7 +417,7 @@ const TCGPlayerOrderProcessor = () => {
     ).join('\n');
 
     navigator.clipboard.writeText(csvData).then(() => {
-      alert('Data copied to clipboard! Ready to paste into spreadsheet.');
+      showToast('Data copied to clipboard! Ready to paste into spreadsheet.');
     });
   };
 
@@ -754,6 +762,13 @@ const TCGPlayerOrderProcessor = () => {
           </ol>
         )}
       </div>
+
+      {toast.show && (
+        <div className="fixed bottom-6 right-6 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-slide-up">
+          <Copy className="w-5 h-5" />
+          <span className="font-medium">{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 };
