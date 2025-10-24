@@ -527,7 +527,7 @@ const TCGPlayerOrderProcessor = () => {
 
           <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4">
             <p className="text-sm text-blue-800">
-              Set mappings are loaded from <code className="bg-blue-100 px-1 rounded">set-mappings.csv</code> in the root of the repository.
+              Set mappings are loaded from <code className="bg-blue-100 px-1 rounded">set-mappings.csv</code> in the root of the <a href="https://github.com/say592/TCGOrderDataProcessor" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">repository</a>.
               To modify mappings, edit the CSV file, rebuild, and redeploy the application.
             </p>
           </div>
