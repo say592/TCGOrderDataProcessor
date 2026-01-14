@@ -12,6 +12,7 @@ const TCGPlayerOrderProcessor = () => {
   const [toast, setToast] = useState({ show: false, message: '' });
   const [setMappings, setSetMappings] = useState({});
   const [mappingsLoaded, setMappingsLoaded] = useState(false);
+  const [emptyRowsRemoved, setEmptyRowsRemoved] = useState({ start: false, end: false });
 
   const showToast = (message) => {
     setToast({ show: true, message });
@@ -72,6 +73,11 @@ const TCGPlayerOrderProcessor = () => {
       }
     }
     return 'Unknown';
+  };
+
+  const isEmptyRow = (order) => {
+    // A row is considered empty if it has no meaningful data
+    return !order.Date && !order.Description && !order['Sell Dollars'] && !order.Notes;
   };
 
   const parseManapoolCardDescription = (cardsText) => {
@@ -245,6 +251,7 @@ const TCGPlayerOrderProcessor = () => {
     }
 
     setErrors([]);
+    setEmptyRowsRemoved({ start: false, end: false });
     const orders = [];
     let totalNet = 0;
     let directCount = 0;
@@ -427,6 +434,23 @@ const TCGPlayerOrderProcessor = () => {
         }
       }
 
+      // Remove empty rows from beginning and end
+      let removedStart = false;
+      let removedEnd = false;
+
+      // Remove empty rows from the beginning
+      while (orders.length > 0 && isEmptyRow(orders[0])) {
+        orders.shift();
+        removedStart = true;
+      }
+
+      // Remove empty rows from the end
+      while (orders.length > 0 && isEmptyRow(orders[orders.length - 1])) {
+        orders.pop();
+        removedEnd = true;
+      }
+
+      setEmptyRowsRemoved({ start: removedStart, end: removedEnd });
       setProcessedOrders(orders);
       setSummary({
         totalOrders: orders.length,
@@ -515,6 +539,7 @@ const TCGPlayerOrderProcessor = () => {
                 setGeneratedUrls([]);
                 setSummary(null);
                 setErrors([]);
+                setEmptyRowsRemoved({ start: false, end: false });
               }}
               className="w-4 h-4"
             />
@@ -533,6 +558,7 @@ const TCGPlayerOrderProcessor = () => {
                 setGeneratedUrls([]);
                 setSummary(null);
                 setErrors([]);
+                setEmptyRowsRemoved({ start: false, end: false });
               }}
               className="w-4 h-4"
             />
@@ -551,6 +577,7 @@ const TCGPlayerOrderProcessor = () => {
                 setGeneratedUrls([]);
                 setSummary(null);
                 setErrors([]);
+                setEmptyRowsRemoved({ start: false, end: false });
               }}
               className="w-4 h-4"
             />
@@ -659,6 +686,19 @@ const TCGPlayerOrderProcessor = () => {
                 <div>Total Net Amount: ${summary.totalNet.toFixed(2)}</div>
                 <div>{summary.allDirect ? 'All Direct Fulfillment' : 'Mixed Fulfillment'}</div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {mode === 'csv' && (emptyRowsRemoved.start || emptyRowsRemoved.end) && (
+        <div className="bg-red-50 border border-red-200 p-3 rounded-lg mb-4">
+          <div className="text-red-800 text-sm space-y-1">
+            {emptyRowsRemoved.start && (
+              <div>⚠️ Warning: Empty rows have been removed from the beginning</div>
+            )}
+            {emptyRowsRemoved.end && (
+              <div>⚠️ Warning: Empty rows have been removed from the end</div>
             )}
           </div>
         </div>
