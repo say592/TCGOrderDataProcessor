@@ -260,9 +260,15 @@ const TCGPlayerOrderProcessor = () => {
       const records = [];
       const lines = inputData.trim().split('\n');
       let currentRecord = '';
-      
-      const firstDataLine = lines[1] || '';
-      const isManapool = firstDataLine.includes('manapool.com');
+
+      // Detect Manapool by scanning first 10 lines for 'manapool.com'
+      let isManapool = false;
+      for (let i = 0; i < Math.min(10, lines.length); i++) {
+        if (lines[i].includes('manapool.com')) {
+          isManapool = true;
+          break;
+        }
+      }
       
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
