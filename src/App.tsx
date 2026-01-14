@@ -131,49 +131,63 @@ const TCGPlayerOrderProcessor = () => {
     const descriptions = [];
     const lines = productsText.split('\n');
 
-    for (const line of lines) {
-      if (line.includes('Magic -') && line.includes('\t')) {
-        const parts = line.split('\t');
-        if (parts.length >= 3) {
-          const productInfo = parts[0].replace('Magic - ', '');
-          const quantity = parseInt(parts[2]) || 1;
+    // New TCGPlayer format spans multiple lines:
+    // Line i: Magic - Set: Card - #Number - Condition[TAB]
+    // Line i+1: $Price
+    // Line i+2: [TAB]Quantity[TAB]$ExtPrice
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
 
-          // New TCGPlayer format: "Set Name: Card Name - #CollectorNum - Condition"
-          // Split by colon first to separate set from card details
-          const colonIndex = productInfo.indexOf(':');
-          if (colonIndex > 0) {
-            const setName = productInfo.substring(0, colonIndex).trim();
-            const cardDetails = productInfo.substring(colonIndex + 1).trim();
+      if (line.includes('Magic -')) {
+        // Extract product info (remove trailing tabs and spaces)
+        const productInfo = line.replace('Magic - ', '').replace(/\t+$/, '').trim();
 
-            // Now split the card details by ' - '
-            const detailsParts = cardDetails.split(' - ');
-            if (detailsParts.length >= 3) {
-              const cardName = detailsParts.slice(0, -2).join(' - ');
-              const collectorNum = detailsParts[detailsParts.length - 2].replace('#', '');
-              const condition = detailsParts[detailsParts.length - 1];
+        // Look ahead 2 lines to find quantity
+        let quantity = 1;
+        if (i + 2 < lines.length) {
+          const quantityLine = lines[i + 2];
+          // Quantity line format: [TAB]Quantity[TAB]$ExtPrice
+          const quantityMatch = quantityLine.match(/^\s*(\d+)\s*\t/);
+          if (quantityMatch) {
+            quantity = parseInt(quantityMatch[1]) || 1;
+          }
+        }
 
-              const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
-              const cleanCondition = condition.replace(' Foil', '');
+        // New TCGPlayer format: "Set Name: Card Name - #CollectorNum - Condition"
+        // Split by colon first to separate set from card details
+        const colonIndex = productInfo.indexOf(':');
+        if (colonIndex > 0) {
+          const setName = productInfo.substring(0, colonIndex).trim();
+          const cardDetails = productInfo.substring(colonIndex + 1).trim();
 
-              descriptions.push(
-                `${quantity}x ${setName}: ${cardName} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
-              );
-            }
-          } else {
-            // Fallback to old format if no colon found
-            const infoParts = productInfo.split(' - ');
-            if (infoParts.length >= 3) {
-              const setAndCard = infoParts.slice(0, -2).join(' - ');
-              const collectorNum = infoParts[infoParts.length - 2].replace('#', '');
-              const condition = infoParts[infoParts.length - 1];
+          // Now split the card details by ' - '
+          const detailsParts = cardDetails.split(' - ');
+          if (detailsParts.length >= 3) {
+            const cardName = detailsParts.slice(0, -2).join(' - ');
+            const collectorNum = detailsParts[detailsParts.length - 2].replace('#', '');
+            const condition = detailsParts[detailsParts.length - 1];
 
-              const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
-              const cleanCondition = condition.replace(' Foil', '');
+            const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
+            const cleanCondition = condition.replace(' Foil', '');
 
-              descriptions.push(
-                `${quantity}x ${setAndCard} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
-              );
-            }
+            descriptions.push(
+              `${quantity}x ${setName}: ${cardName} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
+            );
+          }
+        } else {
+          // Fallback to old format if no colon found
+          const infoParts = productInfo.split(' - ');
+          if (infoParts.length >= 3) {
+            const setAndCard = infoParts.slice(0, -2).join(' - ');
+            const collectorNum = infoParts[infoParts.length - 2].replace('#', '');
+            const condition = infoParts[infoParts.length - 1];
+
+            const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
+            const cleanCondition = condition.replace(' Foil', '');
+
+            descriptions.push(
+              `${quantity}x ${setAndCard} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
+            );
           }
         }
       }
