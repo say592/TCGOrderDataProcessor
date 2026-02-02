@@ -80,6 +80,236 @@ const TCGPlayerOrderProcessor = () => {
     return !order.Date && !order.Description && !order['Sell Dollars'] && !order.Notes;
   };
 
+  // Detect input format: 'tcgplayer_csv', 'manapool_csv', 'tcgplayer_fullpage', 'manapool_fullpage'
+  const detectInputFormat = (text) => {
+    const lines = text.trim().split('\n');
+    const first50Lines = lines.slice(0, 50).join('\n');
+
+    // Check for Manapool full page - has "Order Details (#" pattern
+    if (first50Lines.includes('Order Details (#') ||
+        (first50Lines.includes('Mana Pool') && first50Lines.includes('Earnings'))) {
+      return 'manapool_fullpage';
+    }
+
+    // Check for TCGPlayer full page - has distinctive markers
+    if (first50Lines.includes('Skip to main content') ||
+        first50Lines.includes('Back to Orders') ||
+        (first50Lines.includes('Order:') && first50Lines.includes('Transaction Details'))) {
+      return 'tcgplayer_fullpage';
+    }
+
+    // Check for Manapool CSV format - has manapool.com URLs
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      if (lines[i].includes('manapool.com')) {
+        return 'manapool_csv';
+      }
+    }
+
+    // Default to TCGPlayer CSV format
+    return 'tcgplayer_csv';
+  };
+
+  // Parse TCGPlayer full page format
+  const parseTCGPlayerFullPage = (text) => {
+    const lines = text.split('\n');
+
+    // Extract order number: "Order: 8B5DCE37-3B9294-5659F"
+    let orderNumber = '';
+    const orderMatch = text.match(/Order:\s*([A-F0-9]{8}-[A-F0-9]{6}-[A-F0-9]{5})/i);
+    if (orderMatch) {
+      orderNumber = orderMatch[1];
+    }
+
+    // Extract date: "Order Date" followed by date string or directly from text
+    let orderDate = '';
+    const dateMatch = text.match(/Order Date\s*[\n\r]*(\d{1,2}\/\d{1,2}\/\d{4})/);
+    if (dateMatch) {
+      orderDate = dateMatch[1];
+    }
+
+    // Extract Net Amount
+    let netAmount = 0;
+    const netMatch = text.match(/Net Amount\s+\$?([\d.]+)/);
+    if (netMatch) {
+      netAmount = parseFloat(netMatch[1]);
+    }
+
+    // Extract Fee Amount for Direct
+    let feeAmount = 0;
+    const feeMatch = text.match(/Fee Amount\s+\(\$?([\d.]+)\)/);
+    if (feeMatch) {
+      feeAmount = parseFloat(feeMatch[1]);
+    }
+
+    // Determine fulfillment type
+    let isDirect = false;
+    const fulfillmentMatch = text.match(/Fulfillment\s*[\n\r]*(Normal|Direct)/i);
+    if (fulfillmentMatch) {
+      isDirect = fulfillmentMatch[1].toLowerCase() === 'direct';
+    }
+
+    // Parse products - look for lines starting with "Magic -"
+    const descriptions = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      if (line.startsWith('Magic -')) {
+        // Extract product info: "Magic - Set: Card - #Number - Condition"
+        const productInfo = line.replace('Magic - ', '').trim();
+
+        // Look ahead for quantity - format varies
+        // Could be on same line with tab, or next lines have price then quantity
+        let quantity = 1;
+
+        // Check next few lines for quantity
+        for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+          const nextLine = lines[j].trim();
+          // Look for a line that starts with a number (quantity)
+          const qtyMatch = nextLine.match(/^(\d+)\s*(\$|$)/);
+          if (qtyMatch) {
+            quantity = parseInt(qtyMatch[1]) || 1;
+            break;
+          }
+        }
+
+        // Parse the product info with colon format: "Set Name: Card Name - #CollectorNum - Condition"
+        const colonIndex = productInfo.indexOf(':');
+        if (colonIndex > 0) {
+          const setName = productInfo.substring(0, colonIndex).trim();
+          const cardDetails = productInfo.substring(colonIndex + 1).trim();
+
+          const detailsParts = cardDetails.split(' - ');
+          if (detailsParts.length >= 3) {
+            const cardName = detailsParts.slice(0, -2).join(' - ');
+            const collectorNum = detailsParts[detailsParts.length - 2].replace('#', '');
+            const condition = detailsParts[detailsParts.length - 1];
+
+            const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
+            const cleanCondition = condition.replace(' Foil', '');
+
+            descriptions.push(
+              `${quantity}x ${setName}: ${cardName} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
+            );
+          }
+        } else {
+          // Fallback for old format without colon
+          const infoParts = productInfo.split(' - ');
+          if (infoParts.length >= 3) {
+            const setAndCard = infoParts.slice(0, -2).join(' - ');
+            const collectorNum = infoParts[infoParts.length - 2].replace('#', '');
+            const condition = infoParts[infoParts.length - 1];
+
+            const foilSuffix = condition.includes('Foil') ? ' Foil' : '';
+            const cleanCondition = condition.replace(' Foil', '');
+
+            descriptions.push(
+              `${quantity}x ${setAndCard} - #${collectorNum} - ${cleanCondition}${foilSuffix}`
+            );
+          }
+        }
+      }
+    }
+
+    return {
+      orderNumber,
+      orderDate,
+      netAmount,
+      feeAmount,
+      isDirect,
+      description: descriptions.join(', ')
+    };
+  };
+
+  // Parse Manapool full page format
+  const parseManapoolFullPage = (text) => {
+    const lines = text.split('\n');
+
+    // Extract order ID: "Order Details (#181652-668926)"
+    let orderId = '';
+    const orderMatch = text.match(/Order Details \(#([^)]+)\)/);
+    if (orderMatch) {
+      orderId = orderMatch[1];
+    }
+
+    // Extract date: "Order placed on 01/31/2026, 10:03 PM"
+    let orderDate = '';
+    const dateMatch = text.match(/Order placed on (\d{2}\/\d{2}\/\d{4})/);
+    if (dateMatch) {
+      orderDate = dateMatch[1];
+    }
+
+    // Extract earnings
+    let earnings = 0;
+    const earningsMatch = text.match(/Earnings\s*\$?([\d.]+)/);
+    if (earningsMatch) {
+      earnings = parseFloat(earningsMatch[1]);
+    }
+
+    // Parse cards - look for pattern: CardName followed by SetName • #CollectorNum
+    const descriptions = [];
+    const nonEmptyLines = lines.map(l => l.trim()).filter(l => l);
+
+    for (let i = 0; i < nonEmptyLines.length; i++) {
+      const line = nonEmptyLines[i];
+
+      // Look for set line with bullet point (•) and collector number
+      if (line.includes('•') && line.includes('#')) {
+        // This is a set line: "SetName  • #CollectorNum"
+        const setParts = line.split('•').map(p => p.trim());
+        const setName = setParts[0];
+        let collectorNum = '';
+        if (setParts[1] && setParts[1].startsWith('#')) {
+          collectorNum = setParts[1].substring(1);
+        }
+
+        // Card name is the line before this (skipping the combined line if present)
+        let cardName = '';
+        if (i >= 1) {
+          // Check if the previous line is a card name (not a combined "Card - Set" line)
+          const prevLine = nonEmptyLines[i - 1];
+          if (!prevLine.includes('•') && !prevLine.startsWith('$')) {
+            cardName = prevLine;
+          }
+        }
+
+        // Look for condition after set line
+        let condition = 'NM';
+        if (i + 1 < nonEmptyLines.length) {
+          const nextLine = nonEmptyLines[i + 1];
+          if (['NM', 'LP', 'MP', 'HP', 'DMG', 'Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'].some(c => nextLine.includes(c))) {
+            condition = nextLine;
+          }
+        }
+
+        // Look for quantity and price in subsequent lines
+        let quantity = 1;
+        for (let j = i + 1; j < Math.min(i + 5, nonEmptyLines.length); j++) {
+          const checkLine = nonEmptyLines[j];
+          if (checkLine.includes('x') && !checkLine.includes('$')) {
+            quantity = parseInt(checkLine.replace('x', '')) || 1;
+            break;
+          } else if (/^\d+$/.test(checkLine)) {
+            quantity = parseInt(checkLine) || 1;
+            break;
+          }
+        }
+
+        if (cardName && setName) {
+          descriptions.push(
+            `${quantity}x ${setName}: ${cardName} - #${collectorNum} - ${condition}`
+          );
+        }
+      }
+    }
+
+    return {
+      orderId,
+      orderDate,
+      earnings,
+      description: descriptions.join(', ')
+    };
+  };
+
   const parseManapoolCardDescription = (cardsText) => {
     const descriptions = [];
     const lines = cardsText.split('\n').map(l => l.trim()).filter(l => l);
@@ -257,18 +487,121 @@ const TCGPlayerOrderProcessor = () => {
     let directCount = 0;
 
     try {
+      const inputFormat = detectInputFormat(inputData);
+
+      // Handle full page formats
+      if (inputFormat === 'tcgplayer_fullpage') {
+        const parsed = parseTCGPlayerFullPage(inputData);
+
+        const storeType = parsed.isDirect ? 'Direct TCGplayer' : 'TCGplayer';
+        const directValue = parsed.isDirect ? formatCurrency(parsed.feeAmount) : '';
+
+        const order = {
+          Date: parsed.orderDate,
+          Description: parsed.description || 'No products found',
+          Type: 'Singles',
+          Set: 'Unknown',
+          Store: storeType,
+          Expense: '100%',
+          Payment: 'Fidelity Magic',
+          'Buy Dollars': '',
+          'Sell Dollars': formatCurrency(parsed.netAmount),
+          'Grouping Code': '',
+          Direct: directValue,
+          Notes: parsed.orderNumber,
+          'Raw Data': inputData.replace(/\n/g, ' | ').replace(/\t/g, ' ').substring(0, 500)
+        };
+
+        totalNet = parsed.netAmount;
+        if (parsed.isDirect) directCount = 1;
+
+        // Extract set codes
+        if (order.Description && order.Description !== 'No products found') {
+          const products = order.Description.split(',').map(p => p.trim());
+          const sets = new Set();
+
+          for (const product of products) {
+            const setCode = extractSetCode(product);
+            if (setCode !== 'Unknown') {
+              sets.add(setCode);
+            }
+          }
+
+          if (sets.size > 1) {
+            order.Set = 'Various';
+          } else if (sets.size === 1) {
+            order.Set = Array.from(sets)[0];
+          }
+        }
+
+        orders.push(order);
+        setProcessedOrders(orders);
+        setSummary({
+          totalOrders: orders.length,
+          totalNet: totalNet,
+          allDirect: directCount === orders.length,
+          dateRange: orders.length > 0 ? orders[0].Date : ''
+        });
+        return;
+      }
+
+      if (inputFormat === 'manapool_fullpage') {
+        const parsed = parseManapoolFullPage(inputData);
+
+        const order = {
+          Date: parsed.orderDate,
+          Description: parsed.description || 'No products found',
+          Type: 'Singles',
+          Set: 'Unknown',
+          Store: 'Manapool',
+          Expense: '100%',
+          Payment: 'Fidelity Magic',
+          'Buy Dollars': '',
+          'Sell Dollars': formatCurrency(parsed.earnings),
+          'Grouping Code': '',
+          Direct: '',
+          Notes: parsed.orderId,
+          'Raw Data': inputData.replace(/\n/g, ' | ').replace(/\t/g, ' ').substring(0, 500)
+        };
+
+        totalNet = parsed.earnings;
+
+        // Extract set codes
+        if (order.Description && order.Description !== 'No products found') {
+          const products = order.Description.split(',').map(p => p.trim());
+          const sets = new Set();
+
+          for (const product of products) {
+            const setCode = extractSetCode(product);
+            if (setCode !== 'Unknown') {
+              sets.add(setCode);
+            }
+          }
+
+          if (sets.size > 1) {
+            order.Set = 'Various';
+          } else if (sets.size === 1) {
+            order.Set = Array.from(sets)[0];
+          }
+        }
+
+        orders.push(order);
+        setProcessedOrders(orders);
+        setSummary({
+          totalOrders: orders.length,
+          totalNet: totalNet,
+          allDirect: false,
+          dateRange: orders.length > 0 ? orders[0].Date : ''
+        });
+        return;
+      }
+
+      // CSV formats (original logic)
       const records = [];
       const lines = inputData.trim().split('\n');
       let currentRecord = '';
 
-      // Detect Manapool by scanning first 10 lines for 'manapool.com'
-      let isManapool = false;
-      for (let i = 0; i < Math.min(10, lines.length); i++) {
-        if (lines[i].includes('manapool.com')) {
-          isManapool = true;
-          break;
-        }
-      }
+      const isManapool = inputFormat === 'manapool_csv';
       
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
