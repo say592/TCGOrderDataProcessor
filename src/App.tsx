@@ -85,6 +85,14 @@ const TCGPlayerOrderProcessor = () => {
     const lines = text.trim().split('\n');
     const first50Lines = lines.slice(0, 50).join('\n');
 
+    // Check for Manapool CSV format first - has manapool.com URLs
+    // Must come before fullpage check since CSV data contains "Order Details (#" in quoted columns
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      if (lines[i].includes('manapool.com')) {
+        return 'manapool_csv';
+      }
+    }
+
     // Check for Manapool full page - has "Order Details (#" pattern
     if (first50Lines.includes('Order Details (#') ||
         (first50Lines.includes('Mana Pool') && first50Lines.includes('Earnings'))) {
@@ -96,13 +104,6 @@ const TCGPlayerOrderProcessor = () => {
         first50Lines.includes('Back to Orders') ||
         (first50Lines.includes('Order:') && first50Lines.includes('Transaction Details'))) {
       return 'tcgplayer_fullpage';
-    }
-
-    // Check for Manapool CSV format - has manapool.com URLs
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      if (lines[i].includes('manapool.com')) {
-        return 'manapool_csv';
-      }
     }
 
     // Default to TCGPlayer CSV format
